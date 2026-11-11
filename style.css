@@ -1,0 +1,20 @@
+:root { --bs-primary: #4f46e5; --bs-primary-rgb: 79, 70, 229; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+main { flex: 1; min-height: 70vh; }
+.hero { background: linear-gradient(135deg, #eef2ff 0%, #ffffff 70%); }
+.hero-card { border: 0; border-radius: 1.25rem; box-shadow: 0 1rem 3rem rgba(31, 41, 55, .1); }
+.feature-card { height: 100%; border: 0; box-shadow: 0 .25rem 1rem rgba(31, 41, 55, .06); }
+.auth-card { max-width: 520px; margin: 2rem auto; border: 0; box-shadow: 0 .5rem 2rem rgba(31, 41, 55, .08); }
+.celebration-layer { position: fixed; inset: 0; z-index: 1060; pointer-events: none; overflow: hidden; }
+.firework { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #facc15; box-shadow: 0 -55px #f97316, 39px -39px #ef4444, 55px 0 #22c55e, 39px 39px #3b82f6, 0 55px #a855f7, -39px 39px #ec4899, -55px 0 #14b8a6, -39px -39px #f59e0b; animation: firework-burst 1.8s ease-out infinite; }
+.firework-one { top: 25%; left: 25%; }
+.firework-two { top: 20%; right: 25%; animation-delay: .45s; }
+.firework-three { top: 38%; left: 50%; animation-delay: .9s; }
+.firework-four { top: 48%; left: 15%; animation-delay: 1.2s; }
+.firework-five { top: 45%; right: 15%; animation-delay: 1.5s; }
+.celebration-message { position: absolute; top: 12%; left: 50%; transform: translateX(-50%); color: #4f46e5; background: rgba(255,255,255,.95); border-radius: 999px; padding: .75rem 1.5rem; font-size: 1.2rem; font-weight: 700; box-shadow: 0 .5rem 2rem rgba(31,41,55,.18); animation: celebration-pop 1s ease-out both; }
+.confetti-piece { position: absolute; top: -12px; width: 9px; height: 18px; animation: confetti-fall 3.8s linear forwards; }
+@keyframes firework-burst { 0%, 100% { transform: scale(.25); opacity: 0; } 20% { transform: scale(1); opacity: 1; } 65% { transform: scale(1.15); opacity: .85; } }
+@keyframes confetti-fall { to { transform: translate3d(var(--drift), 105vh, 0) rotate(720deg); opacity: .15; } }
+@keyframes celebration-pop { 0% { opacity: 0; transform: translateX(-50%) scale(.7); } 70% { transform: translateX(-50%) scale(1.08); } 100% { opacity: 1; transform: translateX(-50%) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .firework, .confetti-piece { animation: none; opacity: .8; } }

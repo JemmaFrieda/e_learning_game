@@ -1,0 +1,46 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/../includes/bootstrap.php';
+require_role('admin');
+
+$errors = [];
+$statuses = ['draft', 'published'];
+$courseId = filter_var($_REQUEST['course_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
+$editLesson = null;
+$courseStatement = db()->prepare('SELECT id, title FROM courses WHERE id = :id');
+$courseStatement->execute(['id' => $courseId]);
+$course = $courseStatement->fetch();
+if (!$course) {
+    set_flash('danger', 'Select a valid course first.');
+    redirect('admin/courses.php');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verify_csrf($_POST['csrf_token'] ?? null)) $errors[] = 'Your session token expired. Please try again.';
+    $action = post_string('action');
+    $lessonId = filter_var($_POST['lesson_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
+    $title = post_string('title'); $content = post_string('content'); $videoUrl = post_string('video_url'); $sortOrder = filter_var($_POST['sort_order'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 9999]]); $durationInput = post_string('duration_minutes'); $duration = $durationInput === '' ? null : filter_var($durationInput, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 10000]]); $status = post_string('status');
+    if ($action === 'delete' && !$errors) {
+        $statement = db()->prepare('DELETE FROM lessons WHERE id = :id AND course_id = :course_id'); $statement->execute(['id' => $lessonId, 'course_id' => $courseId]); set_flash('success', 'Lesson deleted successfully.'); redirect('admin/lessons.php?course_id=' . $courseId);
+    }
+    if ($action !== 'delete') {
+        if ($title === '' || mb_strlen($title) > 180) $errors[] = 'Enter a lesson title up to 180 characters.';
+        if ($content === '') $errors[] = 'Enter lesson content.';
+        if ($videoUrl !== '' && youtube_embed_url($videoUrl) === null) $errors[] = 'Enter a valid YouTube video URL or leave the video field empty.';
+        if ($sortOrder === false || $sortOrder === null) $errors[] = 'Enter a valid lesson order.';
+        if ($durationInput !== '' && $duration === false) $errors[] = 'Enter a valid lesson duration.';
+        if (!in_array($status, $statuses, true)) $errors[] = 'Select a valid lesson status.';
+        if ($action === 'update' && !$lessonId) $errors[] = 'Invalid lesson selected.';
+        if (!$errors) {
+            if ($action === 'update') { $statement = db()->prepare('UPDATE lessons SET title = :title, content = :content, video_url = :video_url, sort_order = :sort_order, duration_minutes = :duration, status = :status WHERE id = :id AND course_id = :course_id'); $statement->execute(['title' => $title, 'content' => $content, 'video_url' => $videoUrl ?: null, 'sort_order' => $sortOrder, 'duration' => $duration ?: null, 'status' => $status, 'id' => $lessonId, 'course_id' => $courseId]); set_flash('success', 'Lesson updated successfully.'); } else { $statement = db()->prepare('INSERT INTO lessons (course_id, title, content, video_url, sort_order, duration_minutes, status) VALUES (:course_id, :title, :content, :video_url, :sort_order, :duration, :status)'); $statement->execute(['course_id' => $courseId, 'title' => $title, 'content' => $content, 'video_url' => $videoUrl ?: null, 'sort_order' => $sortOrder, 'duration' => $duration ?: null, 'status' => $status]); set_flash('success', 'Lesson created successfully.'); }
+            redirect('admin/lessons.php?course_id=' . $courseId);
+        }
+        $editLesson = ['id' => $lessonId, 'title' => $title, 'content' => $content, 'video_url' => $videoUrl, 'sort_order' => $sortOrder, 'duration_minutes' => $duration, 'status' => $status];
+    }
+}
+if (!$editLesson && isset($_GET['edit'])) { $editId = filter_var($_GET['edit'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]); if ($editId) { $statement = db()->prepare('SELECT id, title, content, video_url, sort_order, duration_minutes, status FROM lessons WHERE id = :id AND course_id = :course_id'); $statement->execute(['id' => $editId, 'course_id' => $courseId]); $editLesson = $statement->fetch() ?: null; } }
+$lessonStatement = db()->prepare('SELECT id, title, sort_order, duration_minutes, status FROM lessons WHERE course_id = :course_id ORDER BY sort_order, id'); $lessonStatement->execute(['course_id' => $courseId]); $lessons = $lessonStatement->fetchAll();
+$pageTitle = 'Manage lessons'; require __DIR__ . '/../includes/header.php';
+?>
+<div class="py-4"><div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4"><div><h1 class="h2 fw-bold mb-1">Manage lessons</h1><p class="text-secondary mb-0">Course: <?= e($course['title']) ?></p></div><a class="btn btn-outline-primary" href="<?= e(app_url('admin/courses.php')) ?>">Back to courses</a></div><?php if ($errors): ?><div class="alert alert-danger"><ul class="mb-0"><?php foreach ($errors as $error): ?><li><?= e($error) ?></li><?php endforeach; ?></ul></div><?php endif; ?><div class="row g-4 align-items-start"><div class="col-lg-5"><div class="card"><div class="card-body p-4"><h2 class="h5 mb-3"><?= $editLesson ? 'Edit lesson' : 'Add lesson' ?></h2><form method="post" data-disable-submit><input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><input type="hidden" name="course_id" value="<?= (int)$courseId ?>"><input type="hidden" name="action" value="<?= $editLesson ? 'update' : 'create' ?>"><?php if ($editLesson): ?><input type="hidden" name="lesson_id" value="<?= (int)$editLesson['id'] ?>"><?php endif; ?><div class="mb-3"><label class="form-label" for="title">Title</label><input class="form-control" id="title" name="title" maxlength="180" value="<?= e($editLesson['title'] ?? '') ?>" required></div><div class="mb-3"><label class="form-label" for="content">Content</label><textarea class="form-control" id="content" name="content" rows="8" required><?= e($editLesson['content'] ?? '') ?></textarea></div><div class="mb-3"><label class="form-label" for="video_url">YouTube video URL <span class="text-secondary">(optional)</span></label><input class="form-control" id="video_url" name="video_url" type="url" maxlength="500" placeholder="https://www.youtube.com/watch?v=..." value="<?= e($editLesson['video_url'] ?? '') ?>"><div class="form-text">Only YouTube links are supported.</div></div><div class="row g-3 mb-3"><div class="col-6"><label class="form-label" for="sort_order">Order</label><input class="form-control" id="sort_order" name="sort_order" type="number" min="1" max="9999" value="<?= e((string)($editLesson['sort_order'] ?? 1)) ?>" required></div><div class="col-6"><label class="form-label" for="duration_minutes">Minutes</label><input class="form-control" id="duration_minutes" name="duration_minutes" type="number" min="0" max="10000" value="<?= e((string)($editLesson['duration_minutes'] ?? '')) ?>"></div></div><div class="mb-3"><label class="form-label" for="status">Status</label><select class="form-select" id="status" name="status" required><?php foreach ($statuses as $status): ?><option value="<?= e($status) ?>" <?= (($editLesson['status'] ?? 'draft') === $status) ? 'selected' : '' ?>><?= e(ucfirst($status)) ?></option><?php endforeach; ?></select></div><button class="btn btn-primary" type="submit"><?= $editLesson ? 'Update lesson' : 'Create lesson' ?></button><?php if ($editLesson): ?><a class="btn btn-link" href="<?= e(app_url('admin/lessons.php?course_id=' . $courseId)) ?>">Cancel</a><?php endif; ?></form></div></div></div><div class="col-lg-7"><div class="card"><div class="card-body p-0"><div class="p-4 pb-2"><h2 class="h5 mb-0">Lessons</h2></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th class="ps-4">Order</th><th>Lesson</th><th>Status</th><th class="text-end pe-4">Actions</th></tr></thead><tbody><?php if (!$lessons): ?><tr><td colspan="4" class="text-center text-secondary py-4">No lessons created yet.</td></tr><?php endif; ?><?php foreach ($lessons as $lesson): ?><tr><td class="ps-4"><?= (int)$lesson['sort_order'] ?></td><td><strong><?= e($lesson['title']) ?></strong><?php if ($lesson['duration_minutes'] !== null): ?><div class="small text-secondary"><?= (int)$lesson['duration_minutes'] ?> minutes</div><?php endif; ?></td><td><span class="badge text-bg-<?= $lesson['status'] === 'published' ? 'success' : 'warning' ?>"><?= e(ucfirst($lesson['status'])) ?></span></td><td class="text-end pe-4 text-nowrap"><a class="btn btn-sm btn-outline-secondary" href="<?= e(app_url('admin/lessons.php?course_id=' . $courseId . '&edit=' . $lesson['id'])) ?>">Edit</a><form class="d-inline" method="post" onsubmit="return confirm('Delete this lesson?');"><input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><input type="hidden" name="course_id" value="<?= (int)$courseId ?>"><input type="hidden" name="lesson_id" value="<?= (int)$lesson['id'] ?>"><input type="hidden" name="action" value="delete"><button class="btn btn-sm btn-outline-danger" type="submit">Delete</button></form></td></tr><?php endforeach; ?></tbody></table></div></div></div></div></div></div>
+<?php require __DIR__ . '/../includes/footer.php'; ?>
